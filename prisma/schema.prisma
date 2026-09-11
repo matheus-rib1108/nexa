@@ -1,0 +1,289 @@
+// NEXA — schema do banco de dados
+//
+// Banco de desenvolvimento: SQLite (arquivo local, dados reais e persistentes).
+// Para produção, troque o `provider` abaixo para "postgresql" e aponte
+// `url` para a variável DATABASE_URL de um Postgres real — o restante do
+// schema é compatível com PostgreSQL sem alterações (SQLite não suporta o
+// tipo nativo `enum`, por isso usamos `String` com validação via Zod no
+// backend em vez de enums do Prisma).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  lastName     String?
+  email        String   @unique
+  passwordHash String
+  birthDate    DateTime?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Gamificação
+  xp    Int @default(0)
+  level Int @default(1)
+
+  // Preferências
+  theme               String  @default("system") // "light" | "dark" | "system"
+  focusDefaultMinutes Int     @default(25)
+  reduceMotion        Boolean @default(false)
+
+  // Onboarding (seção 45)
+  onboardingCompleted     Boolean @default(false)
+  onboardingGoals         String? // JSON: string[]
+  onboardingChallenges    String? // JSON: string[]
+  onboardingTimeAvailable String?
+
+  // Segurança da conta (seção 63)
+  sessionVersion Int @default(0) // incrementar invalida todas as sessões JWT ativas
+
+  // Cofre / Secure Vault (seções 56-62) — nunca guardamos a senha mestra em texto puro
+  vaultMasterHash String? // hash Argon2id da senha mestra
+  vaultSalt       String? // salt (hex) usado para derivar a chave de criptografia AES
+  vaultCreatedAt  DateTime?
+
+  categories    Category[]
+  tasks         Task[]
+  focusSessions FocusSession[]
+  habits        Habit[]
+  notes         Note[]
+  vaultItems    VaultItem[]
+  brainDumps    BrainDumpEntry[]
+  subjects      Subject[]
+  exams         Exam[]
+  achievements  UserAchievement[]
+  securityLogs  SecurityLog[]
+  resetTokens   PasswordResetToken[]
+  alarms        Alarm[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#6366f1")
+  icon      String   @default("Circle")
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+
+  @@unique([userId, name])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+  exams Exam[]
+
+  @@unique([userId, name])
+}
+
+model Exam {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId  String?
+  subject    Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  title      String
+  date       DateTime
+  topics     String? // JSON: string[]
+  studyPlan  String? // JSON: { day: string, minutes: number, topic: string }[]
+  createdAt  DateTime  @default(now())
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  subjectId   String?
+  subject     Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  priority String @default("media") // "baixa" | "media" | "alta"
+  status   String @default("pendente") // "pendente" | "em_andamento" | "concluida" | "atrasada" | "arquivada"
+
+  dueDate          DateTime?
+  dueTime          String?
+  estimatedMinutes Int?
+  tags             String? // JSON: string[]
+  recurrence       String? // "daily" | "weekly" | null
+  notes            String?
+  isPriorityToday  Boolean @default(false)
+
+  parentTaskId String?
+  parentTask   Task?   @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks     Task[]  @relation("Subtasks")
+  order        Int     @default(0)
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  focusSessions FocusSession[]
+
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@index([parentTaskId])
+}
+
+model FocusSession {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId          String?
+  task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  durationMinutes Int
+  actualSeconds   Int?
+  ambientSound    String?
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  completed       Boolean   @default(false)
+
+  @@index([userId, startedAt])
+}
+
+model Habit {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  icon        String   @default("Sparkles")
+  frequency   String   @default("daily") // "daily" | "weekly" | JSON com dias
+  streak      Int      @default(0)
+  bestStreak  Int      @default(0)
+  stage       String   @default("seed") // "seed" | "sprout" | "tree" | "bloom"
+  createdAt   DateTime @default(now())
+  archivedAt  DateTime?
+
+  logs HabitLog[]
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date      DateTime
+  completed Boolean  @default(true)
+
+  @@unique([habitId, date])
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  tags       String? // JSON: string[]
+  isFavorite Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Cofre: cada segredo é criptografado com AES-256-GCM usando uma chave
+// derivada (scrypt) da senha mestra do usuário + `User.vaultSalt`.
+// O servidor nunca persiste a senha mestra nem a chave derivada.
+model VaultItem {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryLabel   String   @default("Senhas") // "Senhas" | "Contas" | "Códigos" | "Informações privadas"
+  name            String
+  username        String?
+  urlLink         String?
+  note            String?
+  encryptedSecret String // base64 do ciphertext
+  iv              String // base64
+  authTag         String // base64
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model BrainDumpEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rawText   String
+  createdAt DateTime @default(now())
+}
+
+model Achievement {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String
+  icon        String @default("Trophy")
+  xpReward    Int    @default(50)
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  unlockedAt    DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Alarm {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String
+  time        String // "HH:mm"
+  daysOfWeek  String // JSON: number[] (0=domingo .. 6=sábado); vazio = uma vez só
+  sound       String   @default("padrao")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SecurityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // "login" | "login_failed" | "password_change" | "vault_unlock" | "logout_all"
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
