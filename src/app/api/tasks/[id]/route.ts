@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { taskUpdateSchema } from "@/lib/validation";
+import { ownsRefs } from "@/server/ownership";
 import { awardXp } from "@/server/xp";
 import { checkAndUnlockAchievements } from "@/server/achievements";
 import { XP_REWARDS } from "@/lib/gamification";
@@ -26,6 +27,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
   const data = parsed.data;
+  if (!(await ownsRefs(session.user.id, { categoryId: data.categoryId, subjectId: data.subjectId }))) {
+    return NextResponse.json({ error: "Referência não encontrada" }, { status: 404 });
+  }
 
   const wasCompleted = existing.status === "concluida";
   const willBeCompleted = data.status === "concluida";

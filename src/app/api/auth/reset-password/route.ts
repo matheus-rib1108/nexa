@@ -18,18 +18,23 @@ export async function POST(request: Request) {
   const tokenHash = hashToken(parsed.data.token);
   const record = await db.passwordResetToken.findUnique({ where: { tokenHash } });
 
-  if (!record || record.usedAt || record.expiresAt < new Date()) {
-    return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 400 });
-  }
+  const invalid = NextResponse.json({ error: "Link inválido ou expirado" }, { status: 400 });
+  if (!record || record.usedAt || record.expiresAt < new Date()) return invalid;
 
   const passwordHash = await hashPassword(parsed.data.password);
+
+  // Marca o token como usado de forma atômica: dois pedidos simultâneos não passam juntos.
+  const claimed = await db.passwordResetToken.updateMany({
+    where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date() },
+  });
+  if (claimed.count === 0) return invalid;
 
   await db.$transaction([
     db.user.update({
       where: { id: record.userId },
       data: { passwordHash, sessionVersion: { increment: 1 } },
     }),
-    db.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
     db.securityLog.create({ data: { userId: record.userId, type: "password_change" } }),
   ]);
 

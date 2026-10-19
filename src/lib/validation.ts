@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// Data opcional: vazio ou um texto que o Date entende (evita erro 500 com Invalid Date).
+export const optionalDate = z.string().refine((s) => s === "" || !isNaN(Date.parse(s)), "Data inválida");
+
 export const loginSchema = z.object({
   email: z.string().email("E-mail inválido"),
   password: z.string().min(1, "Informe a senha"),
@@ -10,7 +13,7 @@ export const registerSchema = z.object({
   lastName: z.string().trim().max(80).optional().or(z.literal("")),
   email: z.string().email("E-mail inválido").toLowerCase(),
   password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres").max(200),
-  birthDate: z.string().optional().or(z.literal("")),
+  birthDate: optionalDate.optional(),
 });
 
 export const onboardingSchema = z.object({
@@ -28,7 +31,7 @@ export const taskSchema = z.object({
   categoryId: z.string().optional().nullable(),
   subjectId: z.string().optional().nullable(),
   priority: z.enum(PRIORITIES).default("media"),
-  dueDate: z.string().optional().nullable(),
+  dueDate: optionalDate.optional().nullable(),
   dueTime: z.string().optional().nullable(),
   estimatedMinutes: z.number().int().positive().max(1440).optional().nullable(),
   tags: z.array(z.string()).optional(),

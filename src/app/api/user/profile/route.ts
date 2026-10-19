@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { optionalDate } from "@/lib/validation";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   lastName: z.string().trim().max(80).optional().or(z.literal("")),
-  birthDate: z.string().optional().or(z.literal("")),
+  birthDate: optionalDate.optional(),
 });
 
 export async function PATCH(request: Request) {

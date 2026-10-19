@@ -31,7 +31,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const result = await recalcHabitStreak(id);
 
-  if (nowCompleted) {
+  // XP só na primeira marcação do dia: desmarcar e marcar de novo não dá XP extra.
+  if (nowCompleted && !existing) {
     await awardXp(session.user.id, XP_REWARDS.HABIT_CHECK);
     await checkAndUnlockAchievements(session.user.id);
   }

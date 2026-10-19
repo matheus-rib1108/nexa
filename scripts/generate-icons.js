@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- script Node em CommonJS */
 // Gera ícones PNG simples (fundo roxo + "N" branco) para o manifest da PWA,
 // sem depender de bibliotecas externas de imagem — usa apenas zlib nativo do
 // Node para construir o PNG (fundo sólido + um glifo "N" bem simples em

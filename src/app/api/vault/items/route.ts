@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { verifyMasterPassword, encryptVaultSecret } from "@/lib/crypto";
+import { rateLimit } from "@/lib/rate-limit";
 import { vaultItemSchema } from "@/lib/validation";
 
 // Nunca retorna encryptedSecret/iv/authTag na listagem — apenas metadados.
@@ -43,6 +44,10 @@ export async function POST(request: Request) {
   const parsed = vaultItemSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
 
+  // Mesmo limite do /unlock: sem ele, esta rota permitiria força bruta na senha mestra.
+  if (!rateLimit(`vault-unlock:${session.user.id}`, 8, 5 * 60 * 1000).allowed) {
+    return NextResponse.json({ error: "Muitas tentativas. Tente novamente em alguns minutos." }, { status: 429 });
+  }
   const valid = await verifyMasterPassword(parsed.data.masterPassword, user.vaultMasterHash);
   if (!valid) return NextResponse.json({ error: "Senha mestra incorreta" }, { status: 401 });
 

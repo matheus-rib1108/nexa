@@ -29,8 +29,5 @@ export default auth((req) => {
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
-  // O callback jwt() consulta o banco (Prisma) para revalidar a sessão em
-  // "sair de todos os dispositivos" — isso exige o runtime Node.js em vez do
-  // Edge padrão, que não tem acesso ao driver do SQLite/Postgres.
-  runtime: "nodejs",
+  // proxy.ts já roda no Node.js (exigido pelo jwt() que consulta o Prisma); `runtime` aqui gera erro.
 };

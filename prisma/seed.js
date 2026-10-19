@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- script Node em CommonJS */
 // Dados de demonstração (seção 49 da especificação). Roda com:
 //   node prisma/seed.js
 // Cria um usuário de exemplo com tarefas, matérias, prova, hábitos, notas e

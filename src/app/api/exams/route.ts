@@ -4,11 +4,12 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 import { differenceInCalendarDays, startOfToday } from "date-fns";
 import { generateStudyPlan } from "@/lib/study-plan";
+import { ownsRefs } from "@/server/ownership";
 
 const schema = z.object({
   title: z.string().trim().min(1).max(200),
   subjectId: z.string().optional().nullable(),
-  date: z.string().min(1),
+  date: z.string().min(1).refine((s) => !isNaN(Date.parse(s)), "Data inválida"),
   topics: z.array(z.string()).optional(),
 });
 
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+  if (!(await ownsRefs(session.user.id, { subjectId: parsed.data.subjectId }))) {
+    return NextResponse.json({ error: "Matéria não encontrada" }, { status: 404 });
+  }
 
   const examDate = new Date(parsed.data.date);
   const daysUntilExam = differenceInCalendarDays(examDate, startOfToday());

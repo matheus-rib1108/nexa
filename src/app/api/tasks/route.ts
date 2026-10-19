@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { taskSchema } from "@/lib/validation";
+import { ownsRefs } from "@/server/ownership";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -49,6 +50,9 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  if (!(await ownsRefs(session.user.id, data))) {
+    return NextResponse.json({ error: "Referência não encontrada" }, { status: 404 });
+  }
 
   let order = 0;
   if (data.parentTaskId) {

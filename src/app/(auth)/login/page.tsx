@@ -32,7 +32,9 @@ function LoginForm() {
       return;
     }
 
-    router.push(params.get("callbackUrl") || "/dashboard");
+    // Só caminhos internos: bloqueia redirecionamento para outro site (//evil.com, https://...).
+    const cb = params.get("callbackUrl");
+    router.push(cb?.startsWith("/") && !cb.startsWith("//") && !cb.startsWith("/\\") ? cb : "/dashboard");
     router.refresh();
   }
 

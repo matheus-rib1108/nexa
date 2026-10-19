@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { verifyMasterPassword, encryptVaultSecret } from "@/lib/crypto";
+import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -35,6 +36,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
 
+  // Mesmo limite do /unlock: sem ele, esta rota permitiria força bruta na senha mestra.
+  if (!rateLimit(`vault-unlock:${session.user.id}`, 8, 5 * 60 * 1000).allowed) {
+    return NextResponse.json({ error: "Muitas tentativas. Tente novamente em alguns minutos." }, { status: 429 });
+  }
   const valid = await verifyMasterPassword(parsed.data.masterPassword, user.vaultMasterHash);
   if (!valid) return NextResponse.json({ error: "Senha mestra incorreta" }, { status: 401 });
 
